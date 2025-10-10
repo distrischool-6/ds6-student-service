@@ -1,5 +1,6 @@
 package com.ds6.model;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -23,13 +24,13 @@ public class Student {
     private String name;
 
     @Column(nullable = false)
-    private String birthDate;
+    private LocalDate birthDate;
 
     @Column(nullable = false)
-    private Integer grade;
+    private String grade;
 
     @Column(nullable = false)
-    private Integer classNumber;
+    private String classNumber;
 
     private String address;
 
