@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ds6.dto.CreateStudentDTO;
 import com.ds6.dto.StudentDTO;
 import com.ds6.dto.UpdateStudentDTO;
-import com.ds6.service.StudentInterface;
+import com.ds6.service.StudentService;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -30,23 +30,23 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/students")
 @RequiredArgsConstructor
 public class StudentController {
-    private final StudentInterface studentInterface;
+    private final StudentService studentService;
 
     @PostMapping("/create")
     public ResponseEntity<StudentDTO> createStudent(@RequestBody CreateStudentDTO studentDTO) {
-        StudentDTO createdStudent = studentInterface.createStudent(studentDTO);
+        StudentDTO createdStudent = studentService.createStudent(studentDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdStudent);
     }
 
     @GetMapping("/all")
     public ResponseEntity<List<StudentDTO>> getAllStudents() {
-        List<StudentDTO> students = studentInterface.getAllStudents();
+        List<StudentDTO> students = studentService.getAllStudents();
         return ResponseEntity.ok(students);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<StudentDTO> getStudentById(@PathVariable("id") String id) {
-        StudentDTO student = studentInterface.getStudentById(java.util.UUID.fromString(id));
+        StudentDTO student = studentService.getStudentById(java.util.UUID.fromString(id));
         if (student != null) {
             return ResponseEntity.ok(student);
         } else {
@@ -56,7 +56,7 @@ public class StudentController {
 
     @PutMapping("/update/{id}")
     public ResponseEntity<StudentDTO> updateStudent(@PathVariable("id") String id, @RequestBody UpdateStudentDTO studentDTO) {
-        StudentDTO updatedStudent = studentInterface.updateStudent(java.util.UUID.fromString(id), studentDTO);
+        StudentDTO updatedStudent = studentService.updateStudent(java.util.UUID.fromString(id), studentDTO);
         if (updatedStudent != null) {
             return ResponseEntity.ok(updatedStudent);
         } else {
@@ -70,12 +70,12 @@ public class StudentController {
             @RequestParam(required = false) String registration) {
 
         if (registration != null && !registration.isEmpty()) {
-            List<StudentDTO> result = List.of(studentInterface.getStudentByRegistration(registration));
+            List<StudentDTO> result = List.of(studentService.getStudentByRegistration(registration));
             return ResponseEntity.ok(result);
         }
 
         if (name != null && !name.isEmpty()) {
-            List<StudentDTO> results = studentInterface.getStudentsByName(name);
+            List<StudentDTO> results = studentService.getStudentsByName(name);
             return ResponseEntity.ok(results);
         }
 
@@ -97,6 +97,6 @@ public class StudentController {
         response.setHeader(headerKey, headerValue);
 
         // Chama o serviço para escrever os dados CSV diretamente no 'writer' da resposta
-        studentInterface.exportStudentsToCsv(response.getWriter());
+        studentService.exportStudentsToCsv(response.getWriter());
     }
 }

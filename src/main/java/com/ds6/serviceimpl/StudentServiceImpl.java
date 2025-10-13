@@ -18,10 +18,10 @@ import com.ds6.dto.UpdateStudentDTO;
 import com.ds6.exception.ResourceNotFoundException;
 import com.ds6.model.Student;
 import com.ds6.repository.StudentRepository;
-import com.ds6.service.StudentInterface;
+import com.ds6.service.StudentService;
 
 @Service
-public class StudentServiceImpl implements StudentInterface {
+public class StudentServiceImpl implements StudentService {
 
     @Autowired
     private StudentRepository studentRepository;

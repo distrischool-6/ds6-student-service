@@ -9,7 +9,7 @@ import com.ds6.dto.CreateStudentDTO;
 import com.ds6.dto.StudentDTO;
 import com.ds6.dto.UpdateStudentDTO;
 
-public interface StudentInterface {
+public interface StudentService {
     public StudentDTO createStudent(CreateStudentDTO student);
     public List<StudentDTO> getAllStudents();
     public StudentDTO getStudentById(UUID id);
