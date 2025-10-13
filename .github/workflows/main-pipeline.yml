@@ -1,0 +1,19 @@
+name: 'CI/CD Pipeline Principal'
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'ds6-student-service/**'
+
+jobs:
+  call-reusable-workflow:
+    uses: ./.github/.github/workflows/reusable-java-k8s-pipeline.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      service-name: 'ds6-student-service'
+    secrets:
+      inherit

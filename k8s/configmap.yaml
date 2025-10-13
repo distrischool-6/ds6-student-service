@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ds6-student-service-config
+  labels:
+    app: ds6-student-service
+data:
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "distrischool_student"
+  JWT_EXPIRATION: "86400000"

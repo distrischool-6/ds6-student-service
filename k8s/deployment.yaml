@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ds6-student-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ds6-student-service
+  template:
+    metadata:
+      labels:
+        app: ds6-student-service
+    spec:
+      containers:
+      - name: app
+        # Esta linha é um placeholder intencional. A pipeline irá substituí-la.
+        image: imagem-placeholder
+        ports:
+        - containerPort: 8080
+        # Health Probes: Garante que o tráfego só seja enviado para pods saudáveis.
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # Gerenciamento de Recursos: Garante a estabilidade do cluster.
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        # Externalização de Configuração: Carrega configurações do ambiente K8s.
+        envFrom:
+        - configMapRef:
+            name: ds6-student-service-config
+        - secretRef:
+            name: ds6-student-service-secret
