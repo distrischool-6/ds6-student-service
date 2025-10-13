@@ -103,12 +103,9 @@ public class StudentServiceImpl implements StudentInterface {
     public void exportStudentsToCsv(Writer writer) throws IOException {
         List<Student> students = studentRepository.findAll();
 
-        // Define o cabeçalho do ficheiro CSV
         String[] headers = {"ID", "Registration", "Name", "BirthDate", "Address", "Contact"};
 
-        // Usamos try-with-resources para garantir que o CSVPrinter seja fechado corretamente
         try (CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT.withHeader(headers))) {
-            // Itera sobre a lista de alunos e escreve cada um como um registo no CSV
             for (Student student : students) {
                 csvPrinter.printRecord(
                     student.getId(),
