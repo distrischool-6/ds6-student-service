@@ -6,9 +6,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +23,14 @@ import com.ds6.model.Student;
 import com.ds6.repository.StudentRepository;
 import com.ds6.service.StudentService;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class StudentServiceImpl implements StudentService {
 
-    @Autowired
     private StudentRepository studentRepository;
+
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Override
     @Transactional
@@ -40,6 +46,22 @@ public class StudentServiceImpl implements StudentService {
         student.setPhone(studentDTO.phone());
 
         Student savedStudent = studentRepository.save(student);
+
+        try {
+            // Define o nome do tópico para onde a mensagem será enviada
+            String topic = "student.created";
+            // O valor da mensagem será o ID do aluno. Outros serviços podem usar este ID
+            // para obter mais detalhes sobre o aluno se precisarem.
+            String payload = savedStudent.getId().toString();
+
+            kafkaTemplate.send(topic, payload);
+            log.info("Event 'student.created' published for student ID: {}", payload);
+        } catch (Exception e) {
+            // É uma boa prática adicionar um log de erro caso a publicação falhe,
+            // para que a criação do aluno não falhe, mas o erro seja registado.
+            log.error("Failed to publish 'student.created' event for student ID: {}. Error: {}", savedStudent.getId(), e.getMessage());
+        }
+
         return toDTO(savedStudent);
     }
 
