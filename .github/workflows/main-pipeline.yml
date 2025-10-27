@@ -30,18 +30,21 @@ jobs:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
           mkdir -p $HOME/.kube
-          echo "$KUBE_CONFIG_DATA" > $HOME/.kube/config
+          printf '%s' "$KUBE_CONFIG_DATA" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: 3. Aplicar manifestos do Kubernetes
+      - name: 3. Validar manifestos do Kubernetes (dry-run)
+        run: kubectl apply --dry-run=client -f k8s/
+
+      - name: 4. Aplicar manifestos do Kubernetes
         run: kubectl apply -f k8s/
 
-      - name: 4. Atualizar a imagem do deployment de forma segura
+      - name: 5. Atualizar a imagem do deployment de forma segura
         run: >
           kubectl set image deployment/ds6-student-service
           ds6-student-service=${{ vars.DOCKERHUB_USERNAME }}/ds6-student-service:${{ github.sha }}
         # Nota: O segundo 'ds6-student-service' é o NOME DO CONTAINER dentro do seu deployment.yaml.
         # Verifique se este nome está correto.
 
-      - name: 5. Validar o status do rollout do deployment
+      - name: 6. Validar o status do rollout do deployment
         run: kubectl rollout status deployment/ds6-student-service
