@@ -4,16 +4,39 @@ on:
   push:
     branches:
       - 'main'
-    paths:
-      - 'ds6-student-service/**'
 
 jobs:
-  call-reusable-workflow:
+  # Primeiro Job: Build, Teste e Push da Imagem Docker
+  build:
     uses: distrischool-6/.github/workflows/reusable-java-ci.yml@main
-    permissions:
-      contents: read
-      packages: write
     with:
       service-name: 'ds6-student-service'
+      docker-repo: ${{ secrets.DOCKERHUB_USERNAME }} # Passa o username do Docker Hub
     secrets:
-      inherit
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }} # Passa o token do Docker Hub
+
+  # Segundo Job: Deploy no Kubernetes
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build # Garante que este job só roda se o 'build' for bem-sucedido
+
+    steps:
+      - name: 1. Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+        # Nota: O segredo KUBE_CONFIG_DATA deve estar configurado nas Actions deste repositório.
+
+      - name: 3. Atualiza a tag da imagem no deployment.yaml
+        run: |
+          sed -i 's|image: .*|image: ${{ secrets.DOCKERHUB_USERNAME }}/ds6-student-service:${{ github.sha }}|g' k8s/deployment.yaml
+
+      - name: 4. Deploy no K3s
+        run: |
+          kubectl apply -f k8s/
+          echo "Verificando o status dos pods..."
+          kubectl get pods
