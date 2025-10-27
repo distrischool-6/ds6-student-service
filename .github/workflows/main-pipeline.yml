@@ -5,41 +5,16 @@ on:
     branches:
       - 'main'
 
+permissions: 
+  contents: read
+  packages: write
+
+
 jobs:
   # Job 1: Build, Teste e Push da Imagem Docker
   build:
     uses: distrischool-6/.github/.github/workflows/reusable-java-k8s-pipeline.yml@main
     with:
       service-name: 'ds6-student-service'
-  # Job 2: Deploy no Kubernetes
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build # Depende do sucesso do job 'build'
-
-    steps:
-      - name: 1. Checkout do Repositório
-        uses: actions/checkout@v4
-
-      - name: 2. Configurar Kubeconfig de forma segura
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-        run: |
-          mkdir -p $HOME/.kube
-          printf '%s' "$KUBE_CONFIG_DATA" > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-
-      - name: 3. Validar manifestos do Kubernetes (dry-run)
-        run: kubectl apply --dry-run=client -f k8s/
-
-      - name: 4. Aplicar manifestos do Kubernetes
-        run: kubectl apply -f k8s/
-
-      - name: 5. Atualizar a imagem do deployment de forma segura
-        run: >
-          kubectl set image deployment/ds6-student-service
-          ds6-student-service=${{ vars.DOCKERHUB_USERNAME }}/ds6-student-service:${{ github.sha }}
-        # Nota: O segundo 'ds6-student-service' é o NOME DO CONTAINER dentro do seu deployment.yaml.
-        # Verifique se este nome está correto.
-
-      - name: 6. Validar o status do rollout do deployment
-        run: kubectl rollout status deployment/ds6-student-service
+    secrets: 
+      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
