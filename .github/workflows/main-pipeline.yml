@@ -9,7 +9,7 @@ on:
 
 jobs:
   call-reusable-workflow:
-    uses: ./.github/.github/workflows/reusable-java-k8s-pipeline.yml@main
+    uses: distrischool-6/.github/workflows/reusable-java-ci.yml@main
     permissions:
       contents: read
       packages: write
