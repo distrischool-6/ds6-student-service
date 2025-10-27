@@ -8,14 +8,9 @@ on:
 jobs:
   # Job 1: Build, Teste e Push da Imagem Docker
   build:
-    uses: distrischool-6/.github/.github/workflows/reusable-java-ci.yml@main
+    uses: distrischool-6/.github/workflows/reusable-java-ci.yml@main
     with:
       service-name: 'ds6-student-service'
-      # Corrigido: Usa variável (vars) em vez de segredo (secrets) para o username
-      docker-repo: ${{ vars.DOCKERHUB_USERNAME }}
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
   # Job 2: Deploy no Kubernetes
   deploy:
     runs-on: ubuntu-latest
