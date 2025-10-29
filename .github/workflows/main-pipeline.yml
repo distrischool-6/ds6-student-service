@@ -79,6 +79,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
           script: |
             set -e # Exit immediately if a command exits with a non-zero status.
             echo "--- Conectado à VPS. Iniciando deploy... ---"
