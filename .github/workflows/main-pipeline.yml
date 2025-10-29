@@ -91,7 +91,16 @@ jobs:
             echo "Secret 'postgres-secret' criado/atualizado com segurança."
             # --- FIM DA CORREÇÃO ---
             
-
+            # --- NOVO: CRIAR O SEGREDO PARA PUXAR IMAGENS ---
+            echo "Gerenciando o secret do GHCR (ImagePullSecret)..."
+            sudo k3s kubectl delete secret ghcr-secret --ignore-not-found=true
+            sudo k3s kubectl create secret docker-registry ghcr-secret \
+              --docker-server=ghcr.io \
+              --docker-username=${{ github.actor }} \
+              --docker-password='${{ secrets.GHCR_TOKEN }}'
+            echo "Secret 'ghcr-secret' criado/atualizado."
+            # --- FIM DA NOVA ETAPA ---
+            
             # Define o nome completo da imagem com a nova tag
             NEW_IMAGE="ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
             
