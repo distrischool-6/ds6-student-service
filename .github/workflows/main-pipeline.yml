@@ -79,19 +79,33 @@ jobs:
             # Clona o repositório DENTRO da VPS
             git clone ${{ env.REPO_URL }}
             
+
+            # --- CORREÇÃO: ETAPA DE SEGURANÇA QUE FALTAVA ---
+            echo "Gerenciando o secret do PostgreSQL..."
+            
+            # 1. Deleta o secret antigo, se existir (ignora se não encontrar)
+            sudo k3s kubectl delete secret postgres-secret --ignore-not-found=true
+            
+            # 2. Cria o novo secret "do zero" usando o valor do GitHub Actions Secret
+            #    (Certifique-se que 'POSTGRES_PASSWORD' existe nos seus GitHub Secrets)
+            sudo k3s kubectl create secret generic postgres-secret \
+              --from-literal=POSTGRES_USER='postgres' \
+              --from-literal=POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
+            echo "Secret 'postgres-secret' criado/atualizado com segurança."
+            # --- FIM DA CORREÇÃO ---
+            
+
             # Define o nome completo da imagem com a nova tag
             NEW_IMAGE="ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
             
             # Entra no diretório do repositório clonado
             cd ${{ env.REPO_NAME }}
             
-            # !!!!! A CORREÇÃO FINAL E DEFINITIVA !!!!!
             # Atualiza o arquivo de deployment com a tag de imagem correta ANTES de aplicar
-            # A mudança chave é `image: $NEW_IMAGE` para garantir que a chave "image:" seja preservada.
             echo "Atualizando o arquivo deployment.yaml com a imagem: $NEW_IMAGE"
             sed -i "s|image: .*|image: $NEW_IMAGE|g" k8s/deployment.yaml
             
-            # APLICA os manifestos. Isso vai CRIAR os recursos na primeira vez.
+            # APLICA os manifestos. Agora isso vai funcionar.
             echo "Aplicando os manifestos do Kubernetes..."
             sudo k3s kubectl apply -f k8s/
             

@@ -9,11 +9,7 @@ data:
   LOGGING_LEVEL_ROOT: "INFO"
 
   # Configurações do Banco de Dados
-  # 172.17.0.1 é o endereço padrão do host a partir de um contêiner Docker/K3s.
-  DB_URL: "jdbc:postgresql://172.17.0.1:5432/distrischool_students"
-  DB_USERNAME: "postgres"
-  # NOTA: A senha está aqui para simplificar. O ideal em produção é usar um Secret do K8s.
-  DB_PASSWORD: "1234"
+  DB_URL: "jdbc:postgresql://postgres-service:5432/distrischool_students"
 
   # Configurações do Kafka
   KAFKA_BOOTSTRAP_SERVERS: "172.17.0.1:9092"

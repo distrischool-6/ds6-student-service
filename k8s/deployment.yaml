@@ -46,5 +46,18 @@ spec:
         envFrom:
         - configMapRef:
             name: student-service-config
-        # A referência a 'secretRef' foi removida, pois não criamos um Secret.
-        # Se precisar de segredos no futuro, pode adicionar o bloco de volta.
+        # Variáveis sensíveis (se houver) devem ser carregadas de Secrets.
+        env:
+        - name: DB_USERNAME # A variável que o Spring Boot espera
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret # O nome do nosso Secret
+              key: POSTGRES_USER  # A chave DENTRO do Secret
+        
+        - name: DB_PASSWORD # A variável que o Spring Boot espera
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret # O nome do nosso Secret
+              key: POSTGRES_PASSWORD # A chave DENTRO do Secret
+
+          
