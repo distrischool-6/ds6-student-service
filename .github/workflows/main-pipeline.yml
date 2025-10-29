@@ -64,98 +64,52 @@ jobs:
           push: true
           tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
-    #----------------------------------------------------
+  #----------------------------------------------------
+  # JOB 2: Fazer o deploy via SSH na VPS
+  #----------------------------------------------------
+  deploy:
+    name: "Deploy to VPS via SSH"
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
-    # JOB 2: Fazer o deploy via SSH na VPS
+    steps:
+      - name: Deploy to MicroK8s via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e # Exit immediately if a command exits with a non-zero status.
+            echo "--- Conectado à VPS. Iniciando deploy... ---"
 
-    #----------------------------------------------------
+            # 1. Criar/Atualizar o segredo para puxar imagens do GHCR
+            echo "--> Etapa 1/4: Garantindo que o segredo do GHCR existe..."
+            sudo microk8s.kubectl create secret docker-registry ghcr-secret \
+              --namespace=default \
+              --docker-server=ghcr.io \
+              --docker-username=${{ github.actor }} \
+              --docker-password=${{ secrets.GHCR_TOKEN }} \
+              --dry-run=client -o yaml | sudo microk8s.kubectl apply -f -
 
-    deploy:
+            # 2. Clonar o repositório para ter acesso aos arquivos .yaml
+            echo "--> Etapa 2/4: Clonando o repositório na VPS..."
+            REPO_NAME=$(echo ${{ env.IMAGE_NAME }} | cut -d'/' -f2)
+            rm -rf $REPO_NAME
+            git clone https://github.com/${{ env.IMAGE_NAME }}.git
+            cd $REPO_NAME
 
-      name: "Deploy to VPS via SSH"
+            # 3. Aplicar os manifestos de configuração
+            echo "--> Etapa 3/4: Aplicando ConfigMap e Service..."
+            sudo microk8s.kubectl apply -f k8s/configmap.yaml -n default
+            sudo microk8s.kubectl apply -f k8s/service.yaml -n default
 
-      needs: build-and-push
+            # 4. Atualizar a imagem do deployment e verificar
+            echo "--> Etapa 4/4: Atualizando a imagem do deployment e verificando o rollout..."
+            IMAGE_WITH_TAG=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+            sudo microk8s.kubectl set image deployment/student-service student-service-container=$IMAGE_WITH_TAG -n default
+            sudo microk8s.kubectl rollout status deployment/student-service -n default
 
-      runs-on: ubuntu-latest
-
-  
-
-      steps:
-
-        - name: Deploy to MicroK8s via SSH
-
-          uses: appleboy/ssh-action@v1.0.3
-
-          with:
-
-            host: ${{ secrets.VPS_HOST }}
-
-            username: ${{ secrets.VPS_USER }}
-
-            key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-            script: |
-
-              set -e # Exit immediately if a command exits with a non-zero status.
-
-              echo "--- Conectado à VPS. Iniciando deploy... ---"
-
-  
-
-              # 1. Criar/Atualizar o segredo para puxar imagens do GHCR
-
-              echo "--> Etapa 1/4: Garantindo que o segredo do GHCR existe..."
-
-              sudo microk8s.kubectl create secret docker-registry ghcr-secret \
-
-                --namespace=default \
-
-                --docker-server=ghcr.io \
-
-                --docker-username=${{ github.actor }} \
-
-                --docker-password=${{ secrets.GHCR_TOKEN }} \
-
-                --dry-run=client -o yaml | sudo microk8s.kubectl apply -f -
-
-  
-
-              # 2. Clonar o repositório para ter acesso aos arquivos .yaml
-
-              echo "--> Etapa 2/4: Clonando o repositório na VPS..."
-
-              REPO_NAME=${{ env.IMAGE_NAME }}
-
-              rm -rf $REPO_NAME
-
-              git clone https://github.com/$REPO_NAME.git
-
-              cd $REPO_NAME
-
-  
-
-              # 3. Aplicar os manifestos de configuração
-
-              echo "--> Etapa 3/4: Aplicando ConfigMap e Service..."
-
-              sudo microk8s.kubectl apply -f k8s/configmap.yaml -n default
-
-              sudo microk8s.kubectl apply -f k8s/service.yaml -n default
-
-  
-
-              # 4. Atualizar a imagem do deployment e verificar
-
-              echo "--> Etapa 4/4: Atualizando a imagem do deployment e verificando o rollout..."
-
-              IMAGE_WITH_TAG=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
-
-              sudo microk8s.kubectl set image deployment/student-service student-service-container=$IMAGE_WITH_TAG -n default
-
-              sudo microk8s.kubectl rollout status deployment/student-service -n default
-
-  
-
-              echo "--- Deploy concluído com sucesso! ---"
+            echo "--- Deploy concluído com sucesso! ---"
 
   
