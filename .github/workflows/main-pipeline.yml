@@ -67,11 +67,11 @@ jobs:
         uses: actions/checkout@v3
         
       # =================================================================
-      # !!!!! A NOVA ABORDAGEM !!!!!
-      # Usando uma action dedicada para configurar o kubectl
+      # !!!!! A ABORDAGEM CORRETA E MODERNA !!!!!
+      # Usando a action 'k8s-set-context' que não está descontinuada.
       # =================================================================
-      - name: Set up Kubeconfig context
-        uses: azure/k8s-actions/aks-set-context@v1
+      - name: Set Kubernetes context
+        uses: azure/k8s-set-context@v4
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG_DATA }}
         id: setcontext
@@ -81,7 +81,7 @@ jobs:
           echo "Atualizando a imagem para: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           sed -i "s|image:.*|image: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
           
-          # Agora o kubectl funciona sem precisar de nenhuma flag extra
+          # Com o contexto configurado pela action, o kubectl funcionará normalmente.
           kubectl apply -f k8s/
           
           echo "Verificando o status do deploy..."
