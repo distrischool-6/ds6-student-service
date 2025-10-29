@@ -1,12 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: ds6-student-service
+  # Nome mais curto e consistente
+  name: student-service
 spec:
   selector:
-    app: ds6-student-service
+    app: student-service
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP
+      port: 8080
+      # Usa o nome da porta definido no deployment, mais robusto
+      targetPort: http
+  type: NodePort
