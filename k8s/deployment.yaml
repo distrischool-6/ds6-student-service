@@ -13,6 +13,8 @@ spec:
       labels:
         app: student-service
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: student-service-container # Nome mais descritivo
         # O placeholder continua, o pipeline irá substituí-lo corretamente agora
