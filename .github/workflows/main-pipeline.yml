@@ -71,33 +71,23 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > ~/.kube/config
           chmod 600 ~/.kube/config
-          
-      # =================================================================
-      # !!!!! PASSO DE DEPURAÇÃO TEMPORÁRIO !!!!!
-      # =================================================================
-      - name: DEBUG - Verify Kubeconfig Content
-        run: |
-          echo "====================== INÍCIO DA DEPURAÇÃO ======================"
-          echo " "
-          echo ">>> Verificando se o arquivo ~/.kube/config existe e tem conteúdo:"
-          ls -l ~/.kube/config
-          echo " "
-          
-          echo ">>> Imprimindo o conteúdo COMPLETO do arquivo ~/.kube/config:"
-          cat ~/.kube/config
-          echo " "
-          
-          echo "======================= FIM DA DEPURAÇÃO ======================="
-      # =================================================================
         
       - name: Deploy to K3s
+        # =================================================================
+        # !!!!! CORREÇÃO DEFINITIVA !!!!!
+        # Força o kubectl a usar o arquivo de configuração correto
+        # exportando a variável KUBECONFIG e usando a flag --kubeconfig.
+        # =================================================================
+        env:
+          KUBECONFIG: /home/runner/.kube/config
         run: |
           echo "Atualizando a imagem para: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           sed -i "s|image:.*|image: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
           
-          kubectl apply -f k8s/
+          # Executa o apply usando a flag --kubeconfig para máxima certeza
+          kubectl apply --kubeconfig=${KUBECONFIG} -f k8s/
           
           echo "Verificando o status do deploy..."
           sleep 15
-          kubectl get pods
-          kubectl get services
+          kubectl get pods --kubeconfig=${KUBECONFIG}
+          kubectl get services --kubeconfig=${KUBECONFIG}
