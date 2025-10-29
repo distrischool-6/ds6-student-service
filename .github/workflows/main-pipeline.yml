@@ -67,18 +67,19 @@ jobs:
         uses: actions/checkout@v3
         
       # =================================================================
-      # !!!!! A CORREÇÃO FINAL !!!!!
-      # 1. Decodifica o Kubeconfig do Base64 para texto puro.
-      # 2. Passa o texto puro para a action.
+      # !!!!! A CORREÇÃO FINAL (DE VERDADE) !!!!!
+      # Usa a sintaxe correta (heredoc) para salvar a saída de múltiplas linhas
       # =================================================================
       - name: Decode Kubeconfig
         id: kubeconfig
-        run: echo "value=$(echo ${{ secrets.KUBE_CONFIG_DATA }} | base64 -d)" >> $GITHUB_OUTPUT
+        run: |
+          echo "value<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Set Kubernetes context
         uses: azure/k8s-set-context@v4
         with:
-          # Usa o resultado decodificado do passo anterior
           kubeconfig: ${{ steps.kubeconfig.outputs.value }}
         id: setcontext
         
