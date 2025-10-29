@@ -85,9 +85,11 @@ jobs:
             # Entra no diretório do repositório clonado
             cd ${{ env.REPO_NAME }}
             
+            # !!!!! A CORREÇÃO FINAL E DEFINITIVA !!!!!
             # Atualiza o arquivo de deployment com a tag de imagem correta ANTES de aplicar
+            # A mudança chave é `image: $NEW_IMAGE` para garantir que a chave "image:" seja preservada.
             echo "Atualizando o arquivo deployment.yaml com a imagem: $NEW_IMAGE"
-            sed -i "s|image:.*|$NEW_IMAGE|g" k8s/deployment.yaml
+            sed -i "s|image: .*|image: $NEW_IMAGE|g" k8s/deployment.yaml
             
             # APLICA os manifestos. Isso vai CRIAR os recursos na primeira vez.
             echo "Aplicando os manifestos do Kubernetes..."
@@ -95,7 +97,7 @@ jobs:
             
             # Aguarda o deploy ser concluído
             echo "Verificando o status do deploy..."
-            sudo k3s kubectl rollout status deployment/student-service-deployment
+            sudo k3s kubectl rollout status deployment/student-service
             
             echo "Deploy concluído! Verificando pods:"
             sudo k3s kubectl get pods
