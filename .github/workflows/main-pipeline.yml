@@ -1,5 +1,5 @@
 # Nome do Workflow
-name: Build and Deploy to K3s
+name: Build and Deploy to K3s (via SSH)
 
 # Gatilho: Executa sempre que houver um push na branch 'main'
 on:
@@ -51,47 +51,33 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
 
   #----------------------------------------------------
-  # JOB 2: Fazer o deploy da imagem no Kubernetes
+  # JOB 2: Fazer o deploy via SSH na VPS
   #----------------------------------------------------
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        
-      # =================================================================
-      # !!!!! A CORREÇÃO FINAL (DE VERDADE) !!!!!
-      # Usa a sintaxe correta (heredoc) para salvar a saída de múltiplas linhas
-      # novo commit
-      # =================================================================
-      - name: Decode Kubeconfig
-        id: kubeconfig
-        run: |
-          echo "value<<EOF" >> $GITHUB_OUTPUT
-          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Set Kubernetes context
-        uses: azure/k8s-set-context@v4
+      - name: Deploy to K3s via SSH
+        uses: appleboy/ssh-action@v1.0.3 # Usando uma versão específica e estável
         with:
-          kubeconfig: ${{ steps.kubeconfig.outputs.value }}
-        id: setcontext
-        
-      - name: Deploy to K3s
-        run: |
-          echo "Atualizando a imagem para: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          sed -i "s|image:.*|image: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
-          
-          kubectl apply -f k8s/
-          
-          echo "Verificando o status do deploy..."
-          sleep 15
-          kubectl get pods
-          kubectl get services
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Define o nome completo da imagem com a nova tag
+            NEW_IMAGE="ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+            
+            # Atualiza o deployment do Kubernetes para usar a nova imagem.
+            # Este comando roda DENTRO da sua VPS, onde o kubectl sempre funciona!
+            echo "Atualizando deployment para a imagem: $NEW_IMAGE"
+            sudo k3s kubectl set image deployment/student-service-deployment student-service=$NEW_IMAGE
+            
+            # Aguarda e verifica o status do rollout para confirmar que subiu corretamente
+            echo "Verificando o status do deploy..."
+            sudo k3s kubectl rollout status deployment/student-service-deployment
+            
+            echo "Deploy concluído! Verificando pods:"
+            sudo k3s kubectl get pods
