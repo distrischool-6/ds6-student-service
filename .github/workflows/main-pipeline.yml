@@ -67,13 +67,19 @@ jobs:
         uses: actions/checkout@v3
         
       # =================================================================
-      # !!!!! A ABORDAGEM CORRETA E MODERNA !!!!!
-      # Usando a action 'k8s-set-context' que não está descontinuada.
+      # !!!!! A CORREÇÃO FINAL !!!!!
+      # 1. Decodifica o Kubeconfig do Base64 para texto puro.
+      # 2. Passa o texto puro para a action.
       # =================================================================
+      - name: Decode Kubeconfig
+        id: kubeconfig
+        run: echo "value=$(echo ${{ secrets.KUBE_CONFIG_DATA }} | base64 -d)" >> $GITHUB_OUTPUT
+
       - name: Set Kubernetes context
         uses: azure/k8s-set-context@v4
         with:
-          kubeconfig: ${{ secrets.KUBE_CONFIG_DATA }}
+          # Usa o resultado decodificado do passo anterior
+          kubeconfig: ${{ steps.kubeconfig.outputs.value }}
         id: setcontext
         
       - name: Deploy to K3s
@@ -81,7 +87,6 @@ jobs:
           echo "Atualizando a imagem para: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           sed -i "s|image:.*|image: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
           
-          # Com o contexto configurado pela action, o kubectl funcionará normalmente.
           kubectl apply -f k8s/
           
           echo "Verificando o status do deploy..."
