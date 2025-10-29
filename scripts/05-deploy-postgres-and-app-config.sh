@@ -10,16 +10,24 @@ echo "--- [Script 05] Iniciando deploy/verificação do Postgres e Configs da Ap
 echo "(Este script pode ser executado várias vezes sem problemas)"
 
 APP_NAMESPACE="default" # Assumindo que App e Postgres rodam no namespace 'default'
+DB_NAME="distrischool_students" # Nome do banco de dados a ser usado
 
 # --- Segredo do Postgres ---
 POSTGRES_SECRET_NAME="postgres-secret"
 POSTGRES_USER="postgres"
-# !! MUDE ESTA SENHA PARA ALGO SEGURO !!
-POSTGRES_PASSWORD="super-secret-password"
 
 echo ""
 echo "--> Etapa 1/5: Criando/Verificando segredo '$POSTGRES_SECRET_NAME'..."
+# Apenas cria o segredo se ele não existir para evitar sobrescrever uma senha existente.
 if ! sudo microk8s kubectl get secret "$POSTGRES_SECRET_NAME" -n "$APP_NAMESPACE" > /dev/null 2>&1; then
+    echo "   O segredo do Postgres não foi encontrado."
+    read -s -p "   Digite a senha que deseja usar para o usuário '$POSTGRES_USER' do banco de dados: " POSTGRES_PASSWORD
+    echo
+    if [ -z "$POSTGRES_PASSWORD" ]; then
+      echo "   ERRO: A senha não pode ser vazia."
+      exit 1
+    fi
+
     echo "   Criando segredo '$POSTGRES_SECRET_NAME'..."
     sudo microk8s kubectl create secret generic "$POSTGRES_SECRET_NAME" \
       --from-literal=POSTGRES_USER="$POSTGRES_USER" \
@@ -46,7 +54,7 @@ data:
   SPRING_PROFILES_ACTIVE: "prod"
   LOGGING_LEVEL_ROOT: "INFO"
   # URL do Postgres dentro do cluster (usando FQDN para robustez)
-  DB_URL: "jdbc:postgresql://postgres-service.${APP_NAMESPACE}.svc:5432/distrischool_students" # (Ajustado para FQDN)
+  DB_URL: "jdbc:postgresql://postgres-service.${APP_NAMESPACE}.svc:5432/${DB_NAME}" # (Ajustado para FQDN e variável DB_NAME)
   # URL do Kafka (Strimzi) dentro do cluster (usando FQDN)
   KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_STRIMZI_URL}" # (Ajustado para Strimzi FQDN)
 EOF

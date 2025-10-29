@@ -15,33 +15,17 @@ echo "--> Etapa 1/3: Garantindo que MicroK8s está pronto..."
 sudo microk8s status --wait-ready
 
 echo ""
-echo "--> Etapa 2/3: Verificando/Habilitando Add-ons Essenciais e Recomendados..."
-echo "   Atualizando repositório 'community' (para garantir a lista mais recente)..."
-sudo microk8s disable community > /dev/null 2>&1 || true # Ignora erro se já desabilitado
-sudo microk8s enable community
+echo "--> Etapa 2/3: Habilitando Add-ons Essenciais..."
+echo "   (O comando 'enable' é idempotente e não fará nada se já estiver ativo)"
 
-STATUS=$(sudo microk8s status) # Pega o status após habilitar community
+# Lista de add-ons essenciais e recomendados
+ADDONS=("dns" "storage" "helm3" "ingress" "registry" "metrics-server")
 
-enable_addon() {
-    local addon_name=$1
-    echo ""
-    # Verifica se a linha exata do addon existe na seção 'enabled:'
-    if echo "$STATUS" | awk '/addons:/{flag=1; next} /enabled:/{if(flag) eflag=1; next} /disabled:/{if(flag) eflag=0; next} {if(eflag) print}' | grep -qE "^\s+$addon_name\s"; then
-        echo "   ✅ Add-on '$addon_name' já está HABILITADO. (Passei reto)"
-    else
-        echo "   ⏳ Habilitando add-on '$addon_name'..."
-        sudo microk8s enable "$addon_name"
-        echo "   ✅ Add-on '$addon_name' foi HABILITADO."
-    fi
-}
-
-# Add-ons essenciais + recomendados
-enable_addon "dns"
-enable_addon "storage"
-enable_addon "helm3"
-enable_addon "ingress"
-enable_addon "registry"
-enable_addon "metrics-server"
+for addon in "${ADDONS[@]}"; do
+    echo "   - Garantindo que o add-on '$addon' está habilitado..."
+    sudo microk8s enable "$addon"
+done
+echo "   ✅ Add-ons essenciais verificados/habilitados."
 
 echo ""
 echo "--> Etapa 3/3: Configurando Autenticação Docker Hub..."
