@@ -1,0 +1,1 @@
+[![.github/workflows/main-pipeline.yml](https://github.com/distrischool-6/ds6-student-service/actions/workflows/main-pipeline.yml/badge.svg)](https://github.com/distrischool-6/ds6-student-service/actions/workflows/main-pipeline.yml)
