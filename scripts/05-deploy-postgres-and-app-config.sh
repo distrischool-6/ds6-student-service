@@ -34,7 +34,7 @@ fi
 echo ""
 echo "--> Etapa 2/5: Aplicando/Verificando ConfigMap 'student-service-config'..."
 # Referência correta ao serviço Kafka do Strimzi: <cluster-name>-kafka-bootstrap.<namespace>.svc:<port>
-KAFKA_STRIMZI_URL="my-cluster-kafka-bootstrap.${KAFKA_NAMESPACE:-kafka}.svc:9092" # Usando KAFKA_NAMESPACE definido no script 4
+KAFKA_STRIMZI_URL="my-cluster-kafka-bootstrap.kafka.svc:9092"
 
 # 'apply' é idempotente
 cat <<EOF | sudo microk8s kubectl apply -n "$APP_NAMESPACE" -f -

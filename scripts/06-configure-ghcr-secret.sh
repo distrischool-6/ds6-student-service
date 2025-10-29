@@ -23,7 +23,7 @@ fi
 # Cria o segredo 'ghcr-secret' no namespace 'default'.
 # Este segredo será usado pelo Deployment para puxar a imagem do GHCR.
 # Usar 'dry-run' e 'apply' torna o comando idempotente: se o segredo já existir, ele será atualizado.
-echo "Criando/Atualizando o segredo 'ghcr-secret' no namespace 'default'வுகளை"
+echo "Criando/Atualizando o segredo 'ghcr-secret' no namespace 'default'"
 sudo microk8s kubectl create secret docker-registry ghcr-secret \
   --namespace=default \
   --docker-server=ghcr.io \

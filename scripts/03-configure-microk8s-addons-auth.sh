@@ -75,8 +75,8 @@ echo "   Anexando/Verificando segredo na Service Account 'default'..."
 if sudo microk8s kubectl get serviceaccount default -o jsonpath='{.imagePullSecrets[*].name}' | grep -q "docker-hub-creds"; then
     echo "   ✅ Segredo já anexado à SA 'default'. (Passei reto)"
 else
-    # Usa patch --type=merge para adicionar à lista existente (se houver)
-    sudo microk8s kubectl patch serviceaccount default --type=merge -p '{"imagePullSecrets": [{"name": "docker-hub-creds"}]}'
+    # Usa patch --type=json para adicionar à lista existente sem sobrescrever outros segredos
+    sudo microk8s kubectl patch serviceaccount default --type=json -p='[{"op": "add", "path": "/imagePullSecrets/-", "value": {"name": "docker-hub-creds"}}]'
     echo "   ✅ Segredo anexado à SA 'default'."
 fi
 

@@ -8,8 +8,8 @@ on:
       - main
 
 env:
-  # Define o nome da imagem para ser usado em ambos os jobs
   IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   #----------------------------------------------------
@@ -20,6 +20,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Expõe a tag da imagem para outros jobs
+    outputs:
+      image_tag: ${{ env.IMAGE_TAG }}
 
     steps:
       - name: Checkout code
@@ -55,155 +58,77 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        id: build-and-push
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          # Gera o output com o digest da imagem para o próximo job
-          outputs: type=image,name=target,annotation-index.org.opencontainers.image.revision=${{ github.sha }}
-
-    #----------------------------------------------------
-
-    # JOB 2: Aplicar configurações e segredos no cluster
-
-    #----------------------------------------------------
-
-    apply-configs:
-
-      name: "Deploy: Apply Configs & Secrets"
-
-      needs: build-and-push
-
-      runs-on: ubuntu-latest
-
-  
-
-      steps:
-
-        - name: Checkout code
-
-          uses: actions/checkout@v3
-
-  
-
-        - name: Install microk8s kubectl
-
-          run: |
-
-            sudo snap install microk8s --classic
-
-            sudo microk8s status --wait-ready
-
-            sudo microk8s.kubectl version --client
-
-  
-
-        - name: Set up Kubeconfig from Base64 secret
-
-          run: |
-
-            mkdir -p ~/.kube
-
-            echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
-
-            chmod 600 ~/.kube/config
-
-  
-
-        - name: Create/Update GHCR ImagePullSecret
-
-          run: |
-
-            sudo microk8s.kubectl create secret docker-registry ghcr-secret \
-
-              --namespace=default \
-
-              --docker-server=ghcr.io \
-
-              --docker-username=${{ github.actor }} \
-
-              --docker-password=${{ secrets.GHCR_TOKEN }} \
-
-              --dry-run=client -o yaml | sudo microk8s.kubectl apply -f -
-
-  
-
-        - name: Apply Kubernetes manifests (ConfigMap and Service)
-
-          run: |
-
-            sudo microk8s.kubectl apply -f k8s/configmap.yaml -n default
-
-            sudo microk8s.kubectl apply -f k8s/service.yaml -n default
-
-  
-
-    #----------------------------------------------------
-
-    # JOB 3: Atualizar a imagem e verificar o deploy
-
-    #----------------------------------------------------
-
-    rollout-update:
-
-      name: "Deploy: Rollout Image & Verify"
-
-      needs: apply-configs
-
-      runs-on: ubuntu-latest
-
-  
-
-      steps:
-
-        - name: Install microk8s kubectl
-
-          run: |
-
-            sudo snap install microk8s --classic
-
-            sudo microk8s status --wait-ready
-
-            sudo microk8s.kubectl version --client
-
-  
-
-        - name: Set up Kubeconfig from Base64 secret
-
-          run: |
-
-            mkdir -p ~/.kube
-
-            echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
-
-            chmod 600 ~/.kube/config
-
-  
-
-        - name: Update deployment image
-
-          run: |
-
-            sudo microk8s.kubectl set image deployment/student-service student-service=ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} -n default
-
-  
-
-        - name: Verify deployment rollout
-
-          run: |
-
-            sudo microk8s.kubectl rollout status deployment/student-service -n default
-
-  
-
-        - name: Display pods status
-
-          run: |
-
-            echo "Deployment successful! Pods status:"
-
-            sudo microk8s.kubectl get pods -n default
-
-  
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+  #----------------------------------------------------
+  # JOB 2: Aplicar configurações e segredos no cluster
+  #----------------------------------------------------
+  apply-configs:
+    name: "Deploy: Apply Configs & Secrets"
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Kubeconfig from Base64 secret
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create/Update GHCR ImagePullSecret
+        run: |
+          # Este segredo é criado a cada deploy para simplificar o setup inicial do cluster,
+          # evitando a necessidade de executar um script manual antes da primeira execução da pipeline.
+          # Em um cenário ideal, este segredo seria gerenciado como parte da infraestrutura base.
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace=default \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GHCR_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests (ConfigMap and Service)
+        run: |
+          kubectl apply -f k8s/configmap.yaml -n default
+          kubectl apply -f k8s/service.yaml -n default
+
+  #----------------------------------------------------
+  # JOB 3: Atualizar a imagem e verificar o deploy
+  #----------------------------------------------------
+  rollout-update:
+    name: "Deploy: Rollout Image & Verify"
+    needs: [build-and-push, apply-configs]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Kubeconfig from Base64 secret
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/student-service student-service-container=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} -n default
+
+      - name: Verify deployment rollout
+        run: |
+          kubectl rollout status deployment/student-service -n default
+
+      - name: Display pods status
+        run: |
+          echo "Deployment successful! Pods status:"
+          kubectl get pods -n default
