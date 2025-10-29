@@ -1,5 +1,5 @@
 # Nome do Workflow
-name: Build and Deploy to K3s (via SSH)
+name: Build and Deploy to MicroK8s
 
 # Gatilho: Executa sempre que houver um push na branch 'main'
 on:
@@ -8,10 +8,8 @@ on:
       - main
 
 env:
-  # Define o nome da imagem para ser usado em ambos os jobs
   IMAGE_NAME: ${{ github.repository }}
-  REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
-  REPO_NAME: ${{ github.event.repository.name }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   #----------------------------------------------------
@@ -22,6 +20,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Expõe a tag da imagem para outros jobs
+    outputs:
+      image_tag: ${{ env.IMAGE_TAG }}
 
     steps:
       - name: Checkout code
@@ -32,7 +33,17 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
@@ -47,78 +58,77 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        id: build-and-push
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
   #----------------------------------------------------
-  # JOB 2: Fazer o deploy via SSH na VPS
+  # JOB 2: Aplicar configurações e segredos no cluster
   #----------------------------------------------------
-  deploy:
+  apply-configs:
+    name: "Deploy: Apply Configs & Secrets"
     needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to K3s via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          script: |
-            
-            # Remove o diretório do repositório antigo, se existir, para uma clonagem limpa
-            rm -rf ${{ env.REPO_NAME }}
-            
-            # Clona o repositório DENTRO da VPS
-            git clone ${{ env.REPO_URL }}
-            
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-            # --- CORREÇÃO: ETAPA DE SEGURANÇA QUE FALTAVA ---
-            echo "Gerenciando o secret do PostgreSQL..."
-            
-            # 1. Deleta o secret antigo, se existir (ignora se não encontrar)
-            sudo k3s kubectl delete secret postgres-secret --ignore-not-found=true
-            
-            # 2. Cria o novo secret "do zero" usando o valor do GitHub Actions Secret
-            #    (Certifique-se que 'POSTGRES_PASSWORD' existe nos seus GitHub Secrets)
-            sudo k3s kubectl create secret generic postgres-secret \
-              --from-literal=POSTGRES_USER='postgres' \
-              --from-literal=POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
-            echo "Secret 'postgres-secret' criado/atualizado com segurança."
-            # --- FIM DA CORREÇÃO ---
-            
-            # --- NOVO: CRIAR O SEGREDO PARA PUXAR IMAGENS ---
-            echo "Gerenciando o secret do GHCR (ImagePullSecret)..."
-            sudo k3s kubectl delete secret ghcr-secret --ignore-not-found=true
-            sudo k3s kubectl create secret docker-registry ghcr-secret \
-              --docker-server=ghcr.io \
-              --docker-username=${{ github.actor }} \
-              --docker-password='${{ secrets.GHCR_TOKEN }}'
-            echo "Secret 'ghcr-secret' criado/atualizado."
-            # --- FIM DA NOVA ETAPA ---
-            
-            # Define o nome completo da imagem com a nova tag
-            NEW_IMAGE="ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-            
-            # Entra no diretório do repositório clonado
-            cd ${{ env.REPO_NAME }}
-            
-            # Atualiza o arquivo de deployment com a tag de imagem correta ANTES de aplicar
-            echo "Atualizando o arquivo deployment.yaml com a imagem: $NEW_IMAGE"
-            sed -i "s|image: .*|image: $NEW_IMAGE|g" k8s/deployment.yaml
-            
-            # APLICA os manifestos. Agora isso vai funcionar.
-            echo "Aplicando os manifestos do Kubernetes..."
-            sudo k3s kubectl apply -f k8s/
-            
-            # Aguarda o deploy ser concluído
-            echo "Verificando o status do deploy..."
-            sudo k3s kubectl rollout status deployment/student-service
-            
-            echo "Deploy concluído! Verificando pods:"
-            sudo k3s kubectl get pods
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Kubeconfig from Base64 secret
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create/Update GHCR ImagePullSecret
+        run: |
+          # Este segredo é criado a cada deploy para simplificar o setup inicial do cluster,
+          # evitando a necessidade de executar um script manual antes da primeira execução da pipeline.
+          # Em um cenário ideal, este segredo seria gerenciado como parte da infraestrutura base.
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace=default \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GHCR_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests (ConfigMap and Service)
+        run: |
+          kubectl apply -f k8s/configmap.yaml -n default
+          kubectl apply -f k8s/service.yaml -n default
+
+  #----------------------------------------------------
+  # JOB 3: Atualizar a imagem e verificar o deploy
+  #----------------------------------------------------
+  rollout-update:
+    name: "Deploy: Rollout Image & Verify"
+    needs: [build-and-push, apply-configs]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Kubeconfig from Base64 secret
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/student-service student-service-container=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} -n default
+
+      - name: Verify deployment rollout
+        run: |
+          kubectl rollout status deployment/student-service -n default
+
+      - name: Display pods status
+        run: |
+          echo "Deployment successful! Pods status:"
+          kubectl get pods -n default
