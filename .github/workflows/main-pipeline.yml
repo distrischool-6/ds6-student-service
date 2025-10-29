@@ -69,6 +69,7 @@ jobs:
       # =================================================================
       # !!!!! A CORREÇÃO FINAL (DE VERDADE) !!!!!
       # Usa a sintaxe correta (heredoc) para salvar a saída de múltiplas linhas
+      # novo commit
       # =================================================================
       - name: Decode Kubeconfig
         id: kubeconfig
