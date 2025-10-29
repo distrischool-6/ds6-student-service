@@ -10,6 +10,8 @@ on:
 env:
   # Define o nome da imagem para ser usado em ambos os jobs
   IMAGE_NAME: ${{ github.repository }}
+  REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+  REPO_NAME: ${{ github.event.repository.name }}
 
 jobs:
   #----------------------------------------------------
@@ -61,21 +63,37 @@ jobs:
 
     steps:
       - name: Deploy to K3s via SSH
-        uses: appleboy/ssh-action@v1.0.3 # Usando uma versão específica e estável
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # Garante que o git está instalado na VPS
+            sudo apt-get update
+            sudo apt-get install -y git
+            
+            # Remove o diretório do repositório antigo, se existir, para uma clonagem limpa
+            rm -rf ${{ env.REPO_NAME }}
+            
+            # Clona o repositório DENTRO da VPS
+            git clone ${{ env.REPO_URL }}
+            
             # Define o nome completo da imagem com a nova tag
             NEW_IMAGE="ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
             
-            # Atualiza o deployment do Kubernetes para usar a nova imagem.
-            # Este comando roda DENTRO da sua VPS, onde o kubectl sempre funciona!
-            echo "Atualizando deployment para a imagem: $NEW_IMAGE"
-            sudo k3s kubectl set image deployment/student-service-deployment student-service=$NEW_IMAGE
+            # Entra no diretório do repositório clonado
+            cd ${{ env.REPO_NAME }}
             
-            # Aguarda e verifica o status do rollout para confirmar que subiu corretamente
+            # Atualiza o arquivo de deployment com a tag de imagem correta ANTES de aplicar
+            echo "Atualizando o arquivo deployment.yaml com a imagem: $NEW_IMAGE"
+            sed -i "s|image:.*|$NEW_IMAGE|g" k8s/deployment.yaml
+            
+            # APLICA os manifestos. Isso vai CRIAR os recursos na primeira vez.
+            echo "Aplicando os manifestos do Kubernetes..."
+            sudo k3s kubectl apply -f k8s/
+            
+            # Aguarda o deploy ser concluído
             echo "Verificando o status do deploy..."
             sudo k3s kubectl rollout status deployment/student-service-deployment
             
