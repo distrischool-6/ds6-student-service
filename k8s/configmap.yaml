@@ -1,11 +1,15 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ds6-student-service-config
-  labels:
-    app: ds6-student-service
+  # Nome mais curto e consistente
+  name: student-service-config
 data:
-  DB_HOST: "postgres-service"
-  DB_PORT: "5432"
-  DB_NAME: "distrischool_student"
-  JWT_EXPIRATION: "86400000"
+  # Configurações Gerais do Spring
+  SPRING_PROFILES_ACTIVE: "prod"
+  LOGGING_LEVEL_ROOT: "INFO"
+
+  # Configurações do Banco de Dados
+  DB_URL: "jdbc:postgresql://postgres-service:5432/distrischool_students"
+
+  # Configurações do Kafka
+  KAFKA_BOOTSTRAP_SERVERS: "172.17.0.1:9092"

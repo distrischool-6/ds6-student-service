@@ -1,19 +1,116 @@
-name: 'CI/CD Pipeline Principal'
+# Nome do Workflow
+name: Build and Deploy to MicroK8s
 
+# Gatilho: Executa sempre que houver um push na branch 'main'
 on:
   push:
     branches:
-      - 'main'
-    paths:
-      - 'ds6-student-service/**'
+      - main
+
+env:
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  call-reusable-workflow:
-    uses: ./.github/.github/workflows/reusable-java-k8s-pipeline.yml
+  #----------------------------------------------------
+  # JOB 1: Construir a imagem Docker e enviar para o GHCR
+  #----------------------------------------------------
+  build-and-push:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    with:
-      service-name: 'ds6-student-service'
-    secrets:
-      inherit
+    # Expõe a tag da imagem para outros jobs
+    outputs:
+      image_tag: ${{ env.IMAGE_TAG }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build -x test
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+  #----------------------------------------------------
+  # JOB 2: Fazer o deploy via SSH na VPS
+  #----------------------------------------------------
+  deploy:
+    name: "Deploy to VPS via SSH"
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to MicroK8s via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: |
+            set -e # Exit immediately if a command exits with a non-zero status.
+            echo "--- Conectado à VPS. Iniciando deploy... ---"
+
+            # 1. Criar/Atualizar o segredo para puxar imagens do GHCR
+            echo "--> Etapa 1/4: Garantindo que o segredo do GHCR existe..."
+            sudo microk8s.kubectl create secret docker-registry ghcr-secret \
+              --namespace=default \
+              --docker-server=ghcr.io \
+              --docker-username=${{ github.actor }} \
+              --docker-password=${{ secrets.GHCR_TOKEN }} \
+              --dry-run=client -o yaml | sudo microk8s.kubectl apply -f -
+
+            # 2. Clonar o repositório para ter acesso aos arquivos .yaml
+            echo "--> Etapa 2/4: Clonando o repositório na VPS..."
+            REPO_NAME=$(echo ${{ env.IMAGE_NAME }} | cut -d'/' -f2)
+            rm -rf $REPO_NAME
+            git clone https://github.com/${{ env.IMAGE_NAME }}.git
+            cd $REPO_NAME
+
+            # 3. Aplicar os manifestos de configuração
+            echo "--> Etapa 3/4: Aplicando ConfigMap e Service..."
+            sudo microk8s.kubectl apply -f k8s/configmap.yaml -n default
+            sudo microk8s.kubectl apply -f k8s/service.yaml -n default
+
+            # 4. Atualizar a imagem do deployment e verificar
+            echo "--> Etapa 4/4: Atualizando a imagem do deployment e verificando o rollout..."
+            IMAGE_WITH_TAG=ghcr.io/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+            sudo microk8s.kubectl set image deployment/student-service student-service-container=$IMAGE_WITH_TAG -n default
+            sudo microk8s.kubectl rollout status deployment/student-service -n default
+
+            echo "--- Deploy concluído com sucesso! ---"
+
+  

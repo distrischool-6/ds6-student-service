@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  # Garante que o StatefulSet e o Service possam se encontrar
+  serviceName: "postgres-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres # O Service vai procurar por esta label
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine # Imagem oficial do Postgres
+        ports:
+        - containerPort: 5432 # Porta padrão do Postgres
+        envFrom:
+        - secretRef:
+            # Carrega POSTGRES_USER e POSTGRES_PASSWORD
+            # do Secret que o pipeline cria (Passo 1)
+            name: postgres-secret
+        volumeMounts:
+        - name: postgres-data
+          # Monta o armazenamento persistente no diretório de dados do Postgres
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          # Usa o "pedido" de armazenamento que criamos no Passo 2
+          claimName: postgres-pvc

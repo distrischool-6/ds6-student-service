@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  labels:
+    type: local
+spec:
+  storageClassName: manual # Um nome que daremos para ligar ao PVC
+  capacity:
+    storage: 1Gi # 1 Gigabyte (mais que suficiente para dev)
+  accessModes:
+    - ReadWriteOnce # Pode ser montado como leitura/escrita por um único nó
+  hostPath:
+    # Este é o diretório NA SUA VPS onde os dados do banco serão salvos
+    path: "/var/lib/k3s-storage/postgres-data"
+  persistentVolumeReclaimPolicy: Retain # Se o PVC for deletado, os dados no disco são mantidos

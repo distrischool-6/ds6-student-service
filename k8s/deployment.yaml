@@ -1,35 +1,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ds6-student-service
+  # Nome mais curto e consistente
+  name: student-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ds6-student-service
+      app: student-service
   template:
     metadata:
       labels:
-        app: ds6-student-service
+        app: student-service
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
-      - name: app
-        # Esta linha é um placeholder intencional. A pipeline irá substituí-la.
+      - name: student-service-container # Nome mais descritivo
+        # O placeholder continua, o pipeline irá substituí-lo corretamente agora
         image: imagem-placeholder
         ports:
-        - containerPort: 8080
+        # Dando um nome à porta para referência no Service
+        - name: http
+          containerPort: 8080
         # Health Probes: Garante que o tráfego só seja enviado para pods saudáveis.
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
-            port: 8080
-          initialDelaySeconds: 15
+            port: http # Referencia o nome da porta
+          initialDelaySeconds: 20 # Aumentado para dar mais tempo para o Spring Boot iniciar
           periodSeconds: 20
         readinessProbe:
           httpGet:
             path: /actuator/health/readiness
-            port: 8080
-          initialDelaySeconds: 5
+            port: http # Referencia o nome da porta
+          initialDelaySeconds: 10 # Aumentado
           periodSeconds: 10
         # Gerenciamento de Recursos: Garante a estabilidade do cluster.
         resources:
@@ -42,6 +47,19 @@ spec:
         # Externalização de Configuração: Carrega configurações do ambiente K8s.
         envFrom:
         - configMapRef:
-            name: ds6-student-service-config
-        - secretRef:
-            name: ds6-student-service-secret
+            name: student-service-config
+        # Variáveis sensíveis (se houver) devem ser carregadas de Secrets.
+        env:
+        - name: DB_USERNAME # A variável que o Spring Boot espera
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret # O nome do nosso Secret
+              key: POSTGRES_USER  # A chave DENTRO do Secret
+        
+        - name: DB_PASSWORD # A variável que o Spring Boot espera
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret # O nome do nosso Secret
+              key: POSTGRES_PASSWORD # A chave DENTRO do Secret
+
+          
